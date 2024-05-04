@@ -1,104 +1,136 @@
-/*
-Last Updated: 30 Mar. 2018
-By Anton Grimpelhuber (anton.grimpelhuber@gmail.com)
-*/
+#include <IRremote.h>
 
-// The TV-B-Gone for Arduino can use either the EU (European Union) or the NA (North America) database of POWER CODES
-// EU is for Europe, Middle East, Australia, New Zealand, and some countries in Africa and South America
-// NA is for North America, Asia, and the rest of the world not covered by EU
+#define IRLED 13  // Définir le GPIO utilisé pour envoyer le signal IR
 
-// Two regions!
-#define NA 0 //set by a HIGH on REGIONSWITCH pin
-#define EU 1 //set by a LOW on REGIONSWITCH pin
+// Déclaration des constantes pour les commandes IR
+#define POWER_ADDRESS 0x84F40000
+#define POWER_COMMAND 0x0BF40000
 
-// Lets us calculate the size of the NA/EU databases
-#define NUM_ELEM(x) (sizeof (x) / sizeof (*(x)));
+#define INPUT_ADDRESS 0x84F40000
+#define INPUT_COMMAND 0x0AF50000
 
-// set define to 0 to turn off debug output
-#define DEBUG 0
-#define DEBUGP(x) if (DEBUG == 1) { x ; }
+#define MENU_ADDRESS 0x84F40000
+#define MENU_COMMAND 0x0CF30000
 
-// Shortcut to insert single, non-optimized-out nop
-#define NOP __asm__ __volatile__ ("nop")
+#define ZOOM_UP_ADDRESS 0x84F40000
+#define ZOOM_UP_COMMAND 0x1BE40000
 
-// Not used any more on esp8266, so don't bother
-// Tweak this if neccessary to change timing
-// -for 8MHz Arduinos, a good starting value is 11
-// -for 16MHz Arduinos, a good starting value is 25
-#define DELAY_CNT 25
+#define ZOOM_DWN_ADDRESS 0x84F40000
+#define ZOOM_DWN_COMMAND 0x1AE50000
 
-// Makes the codes more readable. the OCRA is actually
-// programmed in terms of 'periods' not 'freqs' - that
-// is, the inverse!
-// #define freq_to_timerval(x) (F_CPU / 8 / x - 1)
-#define freq_to_timerval(x) (x / 1000)
+#define FREEZE_ADDRESS 0x84F40000
+#define FREEZE_COMMAND 0x3BC40000
 
-// The structure of compressed code entries
-struct IrCode {
-  uint8_t timer_val;
-  uint8_t numpairs;
-  uint8_t bitcompression;
-  uint16_t const *times;
-  uint8_t const *codes;
-};
+#define FOCUS_UP_ADDRESS 0x84F40000
+#define FOCUS_UP_COMMAND 0x1DE20000
 
-void xmitCodeElement(uint16_t ontime, uint16_t offtime, uint8_t PWM_code );
-void quickflashLEDx( uint8_t x );
-void delay_ten_us(uint16_t us);
-void quickflashLED( void );
-uint8_t read_bits(uint8_t count);
-uint16_t rawData[300];
-#define MAX_WAIT_TIME 65535 //tens of us (ie: 655.350ms)
-IRsend irsend(IRLED);  // Set the GPIO to be used to sending the message.
-extern const IrCode* const NApowerCodes[];
-extern const IrCode* const EUpowerCodes[];
-extern uint8_t num_NAcodes, num_EUcodes;
-uint8_t bitsleft_r = 0;
-uint8_t bits_r = 0;
-uint8_t code_ptr;
-volatile const IrCode * powerCode;
-uint8_t read_bits(uint8_t count)
-{
-  uint8_t i;
-  uint8_t tmp = 0;
-  for (i = 0; i < count; i++) {
-    if (bitsleft_r == 0) {
-      bits_r = powerCode->codes[code_ptr++];
-      bitsleft_r = 8;
-    }
-    bitsleft_r--;
-    tmp |= (((bits_r >> (bitsleft_r)) & 1) << (count - 1 - i));
-  }
-  return tmp;
-}
-uint16_t ontime, offtime;
-uint8_t i, num_codes;
-uint8_t region;
+#define FOCUS_DWN_ADDRESS 0x84F40000
+#define FOCUS_DWN_COMMAND 0x1CE30000
 
-void delay_ten_us(uint16_t us) {
-  uint8_t timer;
-  while (us != 0) {
-    for (timer = 0; timer <= DELAY_CNT; timer++) {
-      NOP;
-      NOP;
-    }
-    NOP;
-    us--;
-  }
+#define UP_ADDRESS 0x84F40000
+#define UP_COMMAND 0x4AB50000
+
+#define DOWN_ADDRESS 0x84F40000
+#define DOWN_COMMAND 0x4BB40000
+
+#define LEFT_ADDRESS 0x84F40000
+#define LEFT_COMMAND 0x4DB20000
+
+#define RIGHT_ADDRESS 0x84F40000
+#define RIGHT_COMMAND 0x4EB10000
+
+#define ENTER_ADDRESS 0x84F40000
+#define ENTER_COMMAND 0x4CB30000
+
+// Initialisation de l'émetteur IR
+IRsend irsend(IRLED);
+
+void setup() {
+  Serial.begin(9600); // Initialisation de la communication série
+
+  // Ajouter ici d'autres initialisations si nécessaire
 }
 
-void quickflashLED( void ) {
-#if defined(M5LED)
-  digitalWrite(IRLED, M5LED_ON);
-  delay_ten_us(3000);   // 30 ms ON-time delay
-  digitalWrite(IRLED, M5LED_OFF);
-#endif
+void loop() {
+  // Afficher le menu
+  Serial.println("Menu:");
+  Serial.println("1. POWER");
+  Serial.println("2. Input");
+  Serial.println("3. Menu");
+  Serial.println("4. Zoom Up");
+  Serial.println("5. Zoom Down");
+  Serial.println("6. Freeze");
+  Serial.println("7. Focus Up");
+  Serial.println("8. Focus Down");
+  Serial.println("9. Up");
+  Serial.println("10. Down");
+  Serial.println("11. Left");
+  Serial.println("12. Right");
+  Serial.println("13. Enter");
+  Serial.println("Choisissez une option:");
+
+  // Lire l'entrée de l'utilisateur depuis le moniteur série
+  while (!Serial.available()); // Attendre jusqu'à ce qu'une entrée soit disponible
+  int option = Serial.parseInt(); // Lire l'option choisie
+
+  // Envoyer la commande IR correspondante en fonction de l'option choisie
+  switch (option) {
+    case 1:
+      sendIRCommand(POWER_ADDRESS, POWER_COMMAND);
+      break;
+    case 2:
+      sendIRCommand(INPUT_ADDRESS, INPUT_COMMAND);
+      break;
+    case 3:
+      sendIRCommand(MENU_ADDRESS, MENU_COMMAND);
+      break;
+    case 4:
+      sendIRCommand(ZOOM_UP_ADDRESS, ZOOM_UP_COMMAND);
+      break;
+    case 5:
+      sendIRCommand(ZOOM_DWN_ADDRESS, ZOOM_DWN_COMMAND);
+      break;
+    case 6:
+      sendIRCommand(FREEZE_ADDRESS, FREEZE_COMMAND);
+      break;
+    case 7:
+      sendIRCommand(FOCUS_UP_ADDRESS, FOCUS_UP_COMMAND);
+      break;
+    case 8:
+      sendIRCommand(FOCUS_DWN_ADDRESS, FOCUS_DWN_COMMAND);
+      break;
+    case 9:
+      sendIRCommand(UP_ADDRESS, UP_COMMAND);
+      break;
+    case 10:
+      sendIRCommand(DOWN_ADDRESS, DOWN_COMMAND);
+      break;
+    case 11:
+      sendIRCommand(LEFT_ADDRESS, LEFT_COMMAND);
+      break;
+    case 12:
+      sendIRCommand(RIGHT_ADDRESS, RIGHT_COMMAND);
+      break;
+    case 13:
+      sendIRCommand(ENTER_ADDRESS, ENTER_COMMAND);
+      break;
+    default:
+      Serial.println("Option invalide !");
+  }
 }
 
-void quickflashLEDx( uint8_t x ) {
-  quickflashLED();
-  while (--x) {
-    delay_ten_us(25000);     // 250 ms OFF-time delay between flashes
-    quickflashLED();
-  }
+// Fonction pour envoyer une commande IR
+void sendIRCommand(unsigned long address, unsigned long command) {
+  // Créer une instance de la structure IRsendData pour stocker les données à envoyer
+  IRsendData irData;
+  
+  // Remplir les données avec l'adresse et la commande
+  irData.address = address;
+  irData.command = command;
+  
+  // Envoyer la commande IR
+  irsend.send(irData);
+  
+  // Attendre un court instant avant de revenir
+  delay(1000);
 }
